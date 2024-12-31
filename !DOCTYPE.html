@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Graph Tool</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        #graph-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        .memo-label {
+            position: absolute;
+            background-color: white;
+            border: 1px solid black;
+            padding: 5px;
+            max-width: 300px;
+            max-height: 200px;
+            overflow-y: auto;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-word;
+            display: none;
+            z-index: 100;
+            font-size: 12px;
+        }
+        .node-editor {
+            position: absolute;
+            background-color: white;
+            border: 1px solid black;
+            padding: 10px;
+            z-index: 200;
+        }
+        .context-menu {
+            position: absolute;
+            background-color: white;
+            border: 1px solid black;
+            padding: 10px;
+            z-index: 200;
+            display: none;
+        }
+        .context-menu button {
+            display: block;
+            width: 100%;
+            margin-bottom: 5px;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
+</head>
+<body>
+    <div id="graph-container"></div>
+    <div id="context-menu" class="context-menu">
+        <button id="delete-node">삭제</button>
+    </div>
+    <script>
+        const cy = cytoscape({
+            container: document.getElementById('graph-container'),
+            elements: [],
+            style: [
+                {
+                    selector: 'node',
+                    style: {
+                        'background-color': '#FFAA00',
+                        'label': 'data(label)',
+                        'text-valign': 'center',
+                        'color': '#000',
+                        'text-outline-width': 2,
+                        'text-outline-color': '#FFF'
+                    }
+                },
+                {
+                    selector: 'edge',
+                    style: {
+                        'width': 2,
+                        'line-color': '#CCC',
+                        'target-arrow-color': '#CCC',
+                        'target-arrow-shape': 'triangle',
+                        'curve-style': 'bezier'
+                    }
+                }
+            ],
+            layout: {
+                name: 'preset'
+            }
+        });
+
+        const memoDiv = document.createElement('div');
+        memoDiv.className = 'memo-label';
+
+        const contextMenu = document.getElementById('context-menu');
+        const deleteNodeButton = document.getElementById('delete-node');
+
+        let selectedNode = null;
+
+        function showContextMenu(event, node) {
+            selectedNode = node;
+            contextMenu.style.left = `${event.originalEvent.pageX}px`;
+            contextMenu.style.top = `${event.originalEvent.pageY}px`;
+            contextMenu.style.display = 'block';
+        }
+
+        function hideContextMenu() {
+            contextMenu.style.display = 'none';
+            selectedNode = null;
+        }
+
+        deleteNodeButton.addEventListener('click', () => {
+            if (selectedNode) {
+                cy.remove(selectedNode);
+            }
+            hideContextMenu();
+        });
+
+        function showNodeEditor(node, x, y) {
+            const existingEditor = document.querySelector('.node-editor');
+            if (existingEditor) {
+                document.body.removeChild(existingEditor);
+            }
+
+            const editor = document.createElement('div');
+            editor.className = 'node-editor';
+
+            const labelInput = document.createElement('input');
+            labelInput.type = 'text';
+            labelInput.placeholder = '제목';
+            labelInput.value = node.data('label') || '';
+
+            const colorInput = document.createElement('input');
+            colorInput.type = 'text';
+            colorInput.placeholder = '색깔 (#FF0000)';
+            colorInput.value = node.style('background-color');
+
+            const memoTextarea = document.createElement('textarea');
+            memoTextarea.style.width = '300px';
+            memoTextarea.style.height = '100px';
+            memoTextarea.placeholder = '메모';
+            memoTextarea.value = node.data('memo') || '';
+
+            const saveButton = document.createElement('button');
+            saveButton.innerText = '저장';
+            saveButton.addEventListener('click', () => {
+                node.data('label', labelInput.value);
+                node.style('background-color', colorInput.value);
+                node.data('memo', memoTextarea.value);
+                document.body.removeChild(editor);
+                updateMemoDisplay(node);
+            });
+
+            const cancelButton = document.createElement('button');
+            cancelButton.innerText = '취소';
+            cancelButton.addEventListener('click', () => {
+                document.body.removeChild(editor);
+            });
+
+            editor.appendChild(labelInput);
+            editor.appendChild(document.createElement('br'));
+            editor.appendChild(colorInput);
+            editor.appendChild(document.createElement('br'));
+            editor.appendChild(memoTextarea);
+            editor.appendChild(document.createElement('br'));
+            editor.appendChild(saveButton);
+            editor.appendChild(cancelButton);
+
+            editor.style.left = `${x}px`;
+            editor.style.top = `${y}px`;
+
+            document.body.appendChild(editor);
+        }
+
+        function updateMemoDisplay(node) {
+            const memo = node.data('memo');
+            if (memo) {
+                const position = node.renderedPosition();
+                memoDiv.style.left = `${position.x + 15}px`;
+                memoDiv.style.top = `${position.y + 15}px`;
+                memoDiv.style.display = 'block';
+                memoDiv.innerHTML = `<div>${memo}</div>`;
+            }
+        }
+
+        // Add node on double-click
+        cy.on('dbltap', (event) => {
+            if (event.target === cy) {
+                const position = event.position;
+                const id = `node${cy.nodes().length}`;
+                cy.add({
+                    group: 'nodes',
+                    data: { id, label: id },
+                    position
+                });
+            }
+        });
+
+        // Show memo near node on hover
+        cy.on('mouseover', 'node', (event) => {
+            const node = event.target;
+            updateMemoDisplay(node);
+        });
+
+        // Hide memo on mouse out
+        cy.on('mouseout', 'node', () => {
+            memoDiv.style.display = 'none';
+        });
+
+        // Right-click to show context menu
+        cy.on('cxttap', 'node', (event) => {
+            showContextMenu(event, event.target);
+        });
+
+        // Left-click to edit node properties
+        cy.on('tap', 'node', (event) => {
+            const node = event.target;
+            const x = event.originalEvent.pageX;
+            const y = event.originalEvent.pageY;
+            showNodeEditor(node, x, y);
+        });
+
+        // Hide context menu on click outside
+        document.addEventListener('click', (event) => {
+            if (!contextMenu.contains(event.target)) {
+                hideContextMenu();
+            }
+        });
+
+        // Save and Load Functions
+        function saveGraph() {
+            const graphData = cy.json();
+            const blob = new Blob([JSON.stringify(graphData)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'graph.json';
+            a.click();
+        }
+
+        function loadGraph(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const data = JSON.parse(e.target.result);
+                    cy.json(data);
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        // Add save and load buttons
+        const saveButton = document.createElement('button');
+        saveButton.innerText = '저장';
+        saveButton.style.position = 'absolute';
+        saveButton.style.top = '10px';
+        saveButton.style.left = '10px';
+        saveButton.addEventListener('click', saveGraph);
+
+        const loadInput = document.createElement('input');
+        loadInput.type = 'file';
+        loadInput.style.position = 'absolute';
+        loadInput.style.top = '10px';
+        loadInput.style.left = '70px';
+        loadInput.addEventListener('change', loadGraph);
+
+        document.body.appendChild(saveButton);
+        document.body.appendChild(loadInput);
+
+        // Enable zoom and pan
+        cy.userZoomingEnabled(true);
+        cy.userPanningEnabled(true);
+
+        // Start drawing edge on node tap
+        let drawingEdge = false;
+        let edgeSource = null;
+
+        cy.on('tapstart', 'node', (event) => {
+            if (!drawingEdge) {
+                edgeSource = event.target;
+                drawingEdge = true;
+            }
+        });
+
+        cy.on('tapend', 'node', (event) => {
+            if (drawingEdge && edgeSource) {
+                const target = event.target;
+                if (edgeSource !== target) {
+                    cy.add({
+                        group: 'edges',
+                        data: {
+                            id: `${edgeSource.id()}-${target.id()}`,
+                            source: edgeSource.id(),
+                            target: target.id()}
+                    });
+                }
+                drawingEdge = false;
+                edgeSource = null;
+            }
+        });
+
+        cy.on('tap', (event) => {
+            if (drawingEdge && event.target === cy) {
+                drawingEdge = false;
+                edgeSource = null;
+            }
+        });
+    </script>
+</body>
+</html>
