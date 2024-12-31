@@ -99,7 +99,7 @@
         function showContextMenu(event, node) {
             selectedNode = node;
             contextMenu.style.left = `${event.originalEvent.pageX}px`;
-            contextMenu.style.top = `${event.originalEvent.pageY}px`;
+            contextMenu.style.top = `${event.originalEvent.pageY - 30}px`; // Adjusted to appear slightly above the click point
             contextMenu.style.display = 'block';
         }
 
@@ -300,6 +300,7 @@
 
         cy.on('tap', (event) => {
             if (drawingEdge && event.target === cy) {
+
                 drawingEdge = false;
                 edgeSource = null;
             }
